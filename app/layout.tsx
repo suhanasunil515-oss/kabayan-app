@@ -3,7 +3,6 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from "@vercel/speed-insights/next"
-import TawkToWidget from '@/components/global/TawkToWidget'
 import './globals.css'
 
 const geist = Geist({
@@ -92,10 +91,6 @@ export default function RootLayout({
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
         
-        {/* Tawk.to Preload for better performance */}
-        <link rel="preconnect" href="https://embed.tawk.to" />
-        <link rel="dns-prefetch" href="https://embed.tawk.to" />
-        
         {/* Additional SEO meta tags for OFW audience */}
         <meta name="geo.region" content="PH" />
         <meta name="geo.placename" content="Philippines" />
@@ -107,7 +102,6 @@ export default function RootLayout({
         </main>
         <Analytics />
         <SpeedInsights />
-        <TawkToWidget />
       </body>
     </html>
   )

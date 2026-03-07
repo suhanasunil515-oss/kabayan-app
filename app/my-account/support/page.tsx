@@ -1,6 +1,5 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { 
@@ -12,173 +11,14 @@ import {
   MessageCircle, 
   Phone, 
   Mail, 
-  MapPin, 
-  Move, 
-  X,
   Shield,
   Clock,
-  CheckCircle,
   HelpCircle,
-  Facebook,
-  Twitter,
-  MessageSquare
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { GOVERNMENT_LOGOS } from '@/lib/constants/company-info'
 
 export default function SupportPage() {
-  const [chatLoaded, setChatLoaded] = useState(false)
-  const [isInitializing, setIsInitializing] = useState(false)
-  const [customButtonPosition, setCustomButtonPosition] = useState({ 
-    x: typeof window !== 'undefined' ? window.innerWidth - 100 : 300, 
-    y: 100 
-  })
-  const [isDragging, setIsDragging] = useState(false)
-  const dragStartPos = useRef({ x: 0, y: 0 })
-
-  // Initialize Tawk.to chat widget
-  useEffect(() => {
-    if (chatLoaded || isInitializing) return
-
-    setIsInitializing(true)
-
-    // Load Tawk.to script but hide the default button
-    const scriptId = 'tawk-to-support-script'
-    const existingScript = document.getElementById(scriptId)
-    
-    if (!existingScript) {
-      // Custom Tawk.to configuration to hide default button
-      const tawkToScript = `
-        var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
-        
-        // Hide the default widget button
-        Tawk_API = Tawk_API || {};
-        Tawk_API.customStyle = {
-          visibility : {
-            desktop : {
-              position : 'br',
-              xOffset : 20,
-              yOffset : 20,
-              visible : false // Hide the default button
-            },
-            mobile : {
-              position : 'br',
-              xOffset : 10,
-              yOffset : 10,
-              visible : false // Hide the default button
-            }
-          }
-        };
-        
-        (function(){
-          var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
-          s1.async=true;
-          s1.src='https://embed.tawk.to/6988bf432fb5be1c3a2b1c69/1jgv2m84j';
-          s1.charset='UTF-8';
-          s1.setAttribute('crossorigin','*');
-          s0.parentNode.insertBefore(s1,s0);
-        })();
-      `
-      
-      const script = document.createElement('script')
-      script.id = scriptId
-      script.innerHTML = tawkToScript
-      document.head.appendChild(script)
-
-      // Listen for Tawk.to to load
-      const checkTawkLoaded = setInterval(() => {
-        if (window.Tawk_API) {
-          // Hide the widget completely
-          if (window.Tawk_API.hideWidget) {
-            window.Tawk_API.hideWidget()
-          }
-          
-          setChatLoaded(true)
-          setIsInitializing(false)
-          clearInterval(checkTawkLoaded)
-        }
-      }, 100)
-
-      setTimeout(() => {
-        if (!chatLoaded) {
-          clearInterval(checkTawkLoaded)
-          setIsInitializing(false)
-        }
-      }, 10000)
-
-      return () => {
-        clearInterval(checkTawkLoaded)
-      }
-    } else {
-      setIsInitializing(false)
-    }
-  }, [chatLoaded, isInitializing])
-
-  const openChat = () => {
-    if (window.Tawk_API) {
-      // First show the widget
-      if (window.Tawk_API.showWidget) {
-        window.Tawk_API.showWidget()
-      }
-      
-      // Then maximize it
-      if (typeof window.Tawk_API.maximize === 'function') {
-        window.Tawk_API.maximize()
-      } else if (typeof window.Tawk_API.showWidget === 'function') {
-        window.Tawk_API.showWidget()
-      }
-    } else {
-      setChatLoaded(false)
-      setIsInitializing(false)
-      alert('Chat widget is loading. Please try again in a moment.')
-    }
-  }
-
-  // Handle drag for custom button
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-    dragStartPos.current = {
-      x: e.clientX - customButtonPosition.x,
-      y: e.clientY - customButtonPosition.y
-    }
-    
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (isDragging) {
-        const newX = Math.max(0, Math.min(window.innerWidth - 80, moveEvent.clientX - dragStartPos.current.x))
-        const newY = Math.max(0, Math.min(window.innerHeight - 80, moveEvent.clientY - dragStartPos.current.y))
-        
-        setCustomButtonPosition({
-          x: newX,
-          y: newY
-        })
-      }
-    }
-    
-    const handleMouseUp = () => {
-      setIsDragging(false)
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-    
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }
-
-  const handleStartChat = () => {
-    if (isInitializing) {
-      alert('Chat widget is initializing. Please wait...')
-      return
-    }
-    
-    if (!chatLoaded) {
-      alert('Chat widget is still loading. Please wait a moment.')
-      return
-    }
-    
-    openChat()
-  }
-
   const faqItems = [
     {
       question: "How do I apply for a loan?",
@@ -255,29 +95,9 @@ export default function SupportPage() {
               <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
                 <MessageCircle className="w-10 h-10" />
               </div>
-              <h2 className="text-3xl font-bold mb-3">Live Chat Support</h2>
-              <p className="text-lg opacity-90 mb-2">Chat with our support agents in real-time</p>
-              <p className="text-sm opacity-80">Makipag-chat sa aming support agents real-time</p>
-            </div>
-
-            <div className="text-center">
-              <Button
-                onClick={handleStartChat}
-                disabled={!chatLoaded || isInitializing}
-                className={`bg-white text-[#0038A8] hover:bg-white/90 hover:text-[#002c86] text-lg font-semibold py-6 px-10 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 ${
-                  (!chatLoaded || isInitializing) ? 'opacity-70 cursor-not-allowed' : ''
-                }`}
-              >
-                {isInitializing ? 'Loading...' : 'Start Live Chat'}
-              </Button>
-              
-              <div className="mt-6 p-4 bg-white/10 rounded-xl">
-                <p className="text-sm opacity-90 mb-2">💡 <strong>Custom Chat Button:</strong></p>
-                <p className="text-xs opacity-80">
-                  Drag the floating chat button anywhere on screen<br />
-                  I-drag ang floating chat button kahit saan sa screen
-                </p>
-              </div>
+              <h2 className="text-3xl font-bold mb-3">Contact Support</h2>
+              <p className="text-lg opacity-90 mb-2">Reach us by phone or email</p>
+              <p className="text-sm opacity-80">Tumawag o mag-email sa aming support team</p>
             </div>
           </div>
         </div>
@@ -369,8 +189,8 @@ export default function SupportPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white/50 p-3 rounded-lg">
-              <p className="font-semibold text-[#0038A8]">Live Chat</p>
-              <p className="text-sm text-[#6C757D]">24/7 Available</p>
+              <p className="font-semibold text-[#0038A8]">Email Support</p>
+              <p className="text-sm text-[#6C757D]">24hr response time</p>
             </div>
             <div className="bg-white/50 p-3 rounded-lg">
               <p className="font-semibold text-[#CE1126]">Phone Support</p>
@@ -387,42 +207,6 @@ export default function SupportPage() {
           </Button>
         </Link>
       </main>
-
-      {/* Custom Movable Chat Button */}
-      {chatLoaded && (
-        <div
-          style={{
-            position: 'fixed',
-            left: `${customButtonPosition.x}px`,
-            top: `${customButtonPosition.y}px`,
-            zIndex: 10000,
-            cursor: isDragging ? 'grabbing' : 'grab'
-          }}
-          onMouseDown={handleMouseDown}
-          className="select-none"
-        >
-          <div className="relative group">
-            {/* Draggable Handle */}
-            <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-[#0038A8] to-[#CE1126] rounded-full flex items-center justify-center cursor-move opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
-              <Move className="w-3 h-3 text-white" />
-            </div>
-            
-            {/* Main Chat Button */}
-            <button
-              onClick={openChat}
-              className="w-16 h-16 bg-gradient-to-r from-[#0038A8] to-[#CE1126] rounded-full flex items-center justify-center shadow-2xl hover:shadow-3xl transition-all duration-300 hover:scale-110"
-              title="Click to chat, drag to move"
-            >
-              <MessageCircle className="w-8 h-8 text-white" />
-            </button>
-            
-            {/* Tooltip */}
-            <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-              Drag to move, click to chat
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Footer Note */}
       <div className="text-center mt-6 pb-4">
