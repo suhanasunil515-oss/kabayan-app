@@ -20,67 +20,91 @@ export async function GET(request: NextRequest) {
 
     console.log('[v0] Fetching KYC documents for loan_id:', loanId)
 
-    // Try to fetch from loan_applications table first (where KYC images are stored)
-    const { data: loanApplications, error: appError } = await supabase
-      .from('loan_applications')
-      .select('id, kyc_front_url, kyc_back_url, user_id, document_number')
-      .eq('id', parseInt(loanId))
-      .single()
+    let loanApp: { id: number; kyc_front_url?: string | null; kyc_back_url?: string | null; selfie_url?: string | null; document_number?: string } | null = null
 
-    if (appError) {
-      console.log('[v0] loan_applications fetch error:', appError.message)
+    // 1) Try loan_applications by id (loan_id might be loan_application id)
+    const { data: appById, error: appError } = await supabase
+      .from('loan_applications')
+      .select('id, kyc_front_url, kyc_back_url, selfie_url, document_number')
+      .eq('id', parseInt(loanId))
+      .maybeSingle()
+
+    if (!appError && appById) {
+      loanApp = appById
     }
 
-    if (loanApplications?.kyc_front_url) {
-      console.log('[v0] Found KYC front image in loan_applications')
+    // 2) If not found, loan_id may be loans.id — get loan_application_id from loans then fetch
+    if (!loanApp) {
+      const { data: loanRow, error: loanError } = await supabase
+        .from('loans')
+        .select('id, loan_application_id, user_id, document_number')
+        .eq('id', parseInt(loanId))
+        .maybeSingle()
+
+      if (!loanError && loanRow?.loan_application_id) {
+        const { data: appByLoanId } = await supabase
+          .from('loan_applications')
+          .select('id, kyc_front_url, kyc_back_url, selfie_url, document_number')
+          .eq('id', loanRow.loan_application_id)
+          .maybeSingle()
+        if (appByLoanId) loanApp = appByLoanId
+      }
+
+      // 3) Fallback: find latest loan_application for this user (by user_id from loans)
+      if (!loanApp && loanRow?.user_id) {
+        const { data: latestApp } = await supabase
+          .from('loan_applications')
+          .select('id, kyc_front_url, kyc_back_url, selfie_url, document_number')
+          .eq('user_id', loanRow.user_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (latestApp) loanApp = latestApp
+      }
+    }
+
+    if (loanApp && (loanApp.kyc_front_url || loanApp.kyc_back_url || loanApp.selfie_url)) {
+      console.log('[v0] Found KYC in loan_applications')
       return NextResponse.json({
         kyc_documents: [
           {
-            id: loanApplications.id,
-            front_id_image: loanApplications.kyc_front_url,
-            back_id_image: loanApplications.kyc_back_url,
-            document_number: loanApplications.document_number
+            id: loanApp.id,
+            front_id_image: loanApp.kyc_front_url ?? null,
+            back_id_image: loanApp.kyc_back_url ?? null,
+            selfie_image: loanApp.selfie_url ?? null,
+            document_number: loanApp.document_number ?? null
           }
         ]
       })
     }
 
-    // Try to fetch from loans table to get user_id, then fetch from users table
-    const { data: loan, error: loanError } = await supabase
+    // Fallback: users.id_photos (legacy)
+    const { data: loanRow } = await supabase
       .from('loans')
       .select('id, user_id, document_number')
       .eq('id', parseInt(loanId))
-      .single()
+      .maybeSingle()
 
-    if (loanError) {
-      console.log('[v0] loans fetch error:', loanError.message)
-    }
-
-    if (loan?.user_id) {
-      const { data: user, error: userError } = await supabase
+    if (loanRow?.user_id) {
+      const { data: user } = await supabase
         .from('users')
-        .select('id, id_photos, signature_image')
-        .eq('id', loan.user_id)
-        .single()
-
-      if (userError) {
-        console.log('[v0] users fetch error:', userError.message)
-      }
+        .select('id, id_photos')
+        .eq('id', loanRow.user_id)
+        .maybeSingle()
 
       if (user?.id_photos && Array.isArray(user.id_photos) && user.id_photos.length > 0) {
-        const frontIdPhoto = user.id_photos.find(
-          (photo: any) => photo.type === 'front' || photo.type === 'id_front'
-        )
-        
-        if (frontIdPhoto) {
-          console.log('[v0] Found KYC front image in users table')
+        const frontPhoto = user.id_photos.find((p: any) => p.type === 'front' || p.type === 'id_front')
+        const backPhoto = user.id_photos.find((p: any) => p.type === 'back' || p.type === 'id_back')
+        const selfiePhoto = user.id_photos.find((p: any) => p.type === 'selfie')
+        if (frontPhoto || backPhoto || selfiePhoto) {
           return NextResponse.json({
             kyc_documents: [
               {
-                id: loan.id,
-                front_id_image: frontIdPhoto.url || frontIdPhoto,
-                back_id_image: null,
-                document_number: loan.document_number
+                id: loanRow.id,
+                front_id_image: frontPhoto?.url ?? frontPhoto ?? null,
+                back_id_image: backPhoto?.url ?? backPhoto ?? null,
+                selfie_image: selfiePhoto?.url ?? selfiePhoto ?? null,
+                document_number: loanRow.document_number
               }
             ]
           })
@@ -88,7 +112,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // No KYC document found - return empty array
     console.log('[v0] No KYC documents found for loan_id:', loanId)
     return NextResponse.json({
       kyc_documents: []

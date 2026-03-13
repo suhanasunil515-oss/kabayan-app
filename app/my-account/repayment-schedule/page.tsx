@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh'
 import Image from 'next/image'
 import Link from 'next/link'
 import { 
@@ -51,30 +52,31 @@ export default function RepaymentSchedulePage() {
     nextDueDate: '',
   })
 
-  useEffect(() => {
-    const fetchSchedule = async () => {
-      try {
-        const response = await fetch('/api/account/repayment-schedule')
-        if (response.ok) {
-          const data = await response.json()
-          setSchedule(data.installments || [])
-          setLoanSummary(data.summary)
-          console.log('[v0] Repayment schedule loaded')
-        } else if (response.status === 401) {
-          router.push('/login')
-        } else {
-          setError('Failed to load schedule')
-        }
-      } catch (err) {
-        console.error('[v0] Error fetching schedule:', err)
-        setError('An error occurred')
-      } finally {
-        setIsLoading(false)
+  const fetchSchedule = useCallback(async () => {
+    try {
+      const response = await fetch('/api/account/repayment-schedule')
+      if (response.ok) {
+        const data = await response.json()
+        setSchedule(data.installments || [])
+        setLoanSummary(data.summary)
+      } else if (response.status === 401) {
+        router.push('/login')
+      } else {
+        setError('Failed to load schedule')
       }
+    } catch (err) {
+      console.error('[v0] Error fetching schedule:', err)
+      setError('An error occurred')
+    } finally {
+      setIsLoading(false)
     }
-
-    fetchSchedule()
   }, [router])
+
+  useEffect(() => {
+    fetchSchedule()
+  }, [fetchSchedule])
+
+  useRealtimeRefresh(fetchSchedule, { refetchOnVisible: true })
 
   const getStatusColor = (status: string): { bg: string; text: string; border: string } => {
     switch (status) {

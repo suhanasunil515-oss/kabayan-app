@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh'
 import Image from 'next/image'
 import Link from 'next/link'
 import { 
@@ -47,27 +48,29 @@ export default function RepaymentRecordsPage() {
     remainingBalance: 0,
   })
 
-  useEffect(() => {
-    const fetchRecords = async () => {
-      try {
-        const response = await fetch('/api/account/repayment-records')
-        if (response.ok) {
-          const data = await response.json()
-          setRecords(data.records || [])
-          setSummary(data.summary)
-        } else if (response.status === 401) {
-          router.push('/login')
-        }
-      } catch (err) {
-        console.error('[v0] Error:', err)
-        setError('Failed to load records')
-      } finally {
-        setIsLoading(false)
+  const fetchRecords = useCallback(async () => {
+    try {
+      const response = await fetch('/api/account/repayment-records')
+      if (response.ok) {
+        const data = await response.json()
+        setRecords(data.records || [])
+        setSummary(data.summary)
+      } else if (response.status === 401) {
+        router.push('/login')
       }
+    } catch (err) {
+      console.error('[v0] Error:', err)
+      setError('Failed to load records')
+    } finally {
+      setIsLoading(false)
     }
-
-    fetchRecords()
   }, [router])
+
+  useEffect(() => {
+    fetchRecords()
+  }, [fetchRecords])
+
+  useRealtimeRefresh(fetchRecords, { refetchOnVisible: true })
 
   const handleExport = (format: 'csv' | 'pdf') => {
     console.log(`[v0] Exporting as ${format}`)

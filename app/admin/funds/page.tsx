@@ -234,9 +234,9 @@ export default function FundManagementPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: searchedUser.id,
-          amount,
-          purpose: depositPurpose,
+          userId: Number(searchedUser.id),
+          amount: Number(amount),
+          purpose: depositPurpose || 'Manual deposit',
           notes: depositNotes.trim() || undefined,
         }),
       });
@@ -611,7 +611,7 @@ export default function FundManagementPage() {
                 <div className="mt-4">
                   <Button
                     onClick={handleDepositSubmit}
-                    disabled={depositSubmitLoading || !depositAmount || parseFloat(depositAmount) <= 0}
+                    disabled={depositSubmitLoading || !searchedUser || !depositAmount || parseFloat(depositAmount) <= 0}
                     className="bg-gradient-to-r from-[#0038A8] to-[#CE1126] hover:from-[#002c86] hover:to-[#b80f20] text-white"
                   >
                     {depositSubmitLoading ? 'Processing...' : 'Complete deposit'}

@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh'
 import Image from 'next/image'
 import Link from 'next/link'
 import {
@@ -68,129 +69,91 @@ export default function LoanContractPage() {
   const [error, setError] = useState('')
   const [debugInfo, setDebugInfo] = useState<any>({})
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const debug: any = {}
+  const fetchData = useCallback(async () => {
+    try {
+      const debug: any = {}
+      const cookies = document.cookie.split(';')
+      const userIdCookie = cookies.find(c => c.trim().startsWith('user_id='))
+      const userId = userIdCookie ? userIdCookie.split('=')[1] : null
+      debug.userId = userId
 
-        // Get userId from cookies
-        const cookies = document.cookie.split(';')
-        const userIdCookie = cookies.find(c => c.trim().startsWith('user_id='))
-        const userId = userIdCookie ? userIdCookie.split('=')[1] : null
-        debug.userId = userId
-
-        // Fetch user data
-        const userResponse = await fetch('/api/user')
-        debug.userStatus = userResponse.status
-
-        if (!userResponse.ok) {
-          if (userResponse.status === 401) {
-            router.push('/login')
-            return
-          }
-          throw new Error('Failed to fetch user data')
+      const userResponse = await fetch('/api/user')
+      debug.userStatus = userResponse.status
+      if (!userResponse.ok) {
+        if (userResponse.status === 401) {
+          router.push('/login')
+          return
         }
-
-        const userResult = await userResponse.json()
-        const user = userResult.user || {}
-        debug.userData = {
-          full_name: user.full_name,
-          hasSignature: !!user.signature_image
-        }
-
-        setUserData({
-          full_name: user.full_name || '',
-          id_card_number: user.id_card_number || '',
-          phone_number: user.phone_number || '',
-          signature_image: user.signature_image || '',
-          bank_details: user.bank_details
-        })
-
-        // IMPORTANT: Fetch from loan_applications table directly
-        console.log('[v0] Fetching from /api/loans?action=get_user_application')
-        const appResponse = await fetch('/api/loans?action=get_user_application')
-        debug.appStatus = appResponse.status
-
-        if (appResponse.ok) {
-          const appData = await appResponse.json()
-          console.log('[v0] Loan application data received:', appData)
-          debug.appData = appData
-
-          if (appData.application) {
-            console.log('[v0] Application object:', appData.application)
-            console.log('[v0] Signature URL from application:', appData.application.signature_url)
-            console.log('[v0] Signature exists?', appData.application.signature_url ? 'YES' : 'NO')
-
-            if (appData.application.signature_url) {
-              console.log('[v0] Signature URL length:', appData.application.signature_url.length)
-              console.log('[v0] Signature URL starts with:', appData.application.signature_url.substring(0, 30))
-            }
-
-            debug.signatureFromApp = appData.application.signature_url ? 'present' : 'missing'
-            setLoanApplication(appData.application)
-          } else {
-            console.log('[v0] No application data in response')
-          }
-        } else {
-          console.log('[v0] App response not OK:', appResponse.status)
-          const errorText = await appResponse.text()
-          console.log('[v0] Error response:', errorText)
-        }
-
-        // Fetch loan status as backup
-        console.log('[v0] Fetching from /api/loan-status')
-        const loanStatusResponse = await fetch('/api/loan-status')
-        debug.loanStatus = loanStatusResponse.status
-
-        if (loanStatusResponse.ok) {
-          const loanStatusData = await loanStatusResponse.json()
-          console.log('[v0] Loan status data:', loanStatusData)
-          debug.loanStatusData = loanStatusData
-
-          // Only set if we don't already have application data
-          if (loanStatusData.loan && !loanApplication) {
-            console.log('[v0] Setting loan application from loan-status')
-            setLoanApplication({
-              id: loanStatusData.loan.id || 0,
-              user_id: parseInt(userId || '0'),
-              document_number: loanStatusData.loan.documentNumber || '',
-              amount_requested: parseFloat(loanStatusData.loan.amountRequested) || 0,
-              loan_term_months: parseInt(loanStatusData.loan.loanTerm) || 0,
-              interest_rate: parseFloat(loanStatusData.loan.interestRate) || 0,
-              status: loanStatusData.loan.status || 'pending',
-              signature_url: loanStatusData.loan.signatureUrl || user.signature_image,
-              created_at: loanStatusData.loan.createdAt || new Date().toISOString()
-            })
-          }
-        }
-
-        // Also fetch from loans table as backup
-        const loansResponse = await fetch('/api/loans')
-        debug.loansStatus = loansResponse.status
-
-        if (loansResponse.ok) {
-          const loansData = await loansResponse.json()
-          console.log('[v0] Loans data:', loansData)
-          debug.loansData = loansData
-
-          if (loansData.loans && loansData.loans.length > 0) {
-            const activeLoan = loansData.loans[0]
-            setLoan(activeLoan)
-          }
-        }
-
-        setDebugInfo(debug)
-
-      } catch (err) {
-        console.error('[v0] Error fetching data:', err)
-        setError('Failed to load contract data')
-      } finally {
-        setIsLoading(false)
+        throw new Error('Failed to fetch user data')
       }
-    }
 
-    fetchData()
+      const userResult = await userResponse.json()
+      const user = userResult.user || {}
+      debug.userData = { full_name: user.full_name, hasSignature: !!user.signature_image }
+      setUserData({
+        full_name: user.full_name || '',
+        id_card_number: user.id_card_number || '',
+        phone_number: user.phone_number || '',
+        signature_image: user.signature_image || '',
+        bank_details: user.bank_details
+      })
+
+      const appResponse = await fetch('/api/loans?action=get_user_application')
+      debug.appStatus = appResponse.status
+      let hadAppData = false
+      if (appResponse.ok) {
+        const appData = await appResponse.json()
+        debug.appData = appData
+        if (appData.application) {
+          debug.signatureFromApp = appData.application.signature_url ? 'present' : 'missing'
+          setLoanApplication(appData.application)
+          hadAppData = true
+        }
+      }
+
+      const loanStatusResponse = await fetch('/api/loan-status')
+      debug.loanStatus = loanStatusResponse.status
+      if (loanStatusResponse.ok) {
+        const loanStatusData = await loanStatusResponse.json()
+        debug.loanStatusData = loanStatusData
+        if (loanStatusData.loan && !hadAppData) {
+          setLoanApplication({
+            id: loanStatusData.loan.id || 0,
+            user_id: parseInt(userId || '0'),
+            document_number: loanStatusData.loan.documentNumber || '',
+            amount_requested: parseFloat(loanStatusData.loan.amountRequested) || 0,
+            loan_term_months: parseInt(loanStatusData.loan.loanTerm) || 0,
+            interest_rate: parseFloat(loanStatusData.loan.interestRate) || 0,
+            status: loanStatusData.loan.status || 'pending',
+            signature_url: loanStatusData.loan.signatureUrl || user.signature_image,
+            created_at: loanStatusData.loan.createdAt || new Date().toISOString()
+          })
+        }
+      }
+
+      const loansResponse = await fetch('/api/loans')
+      debug.loansStatus = loansResponse.status
+      if (loansResponse.ok) {
+        const loansData = await loansResponse.json()
+        debug.loansData = loansData
+        if (loansData.loans && loansData.loans.length > 0) {
+          setLoan(loansData.loans[0])
+        }
+      }
+      setDebugInfo(debug)
+    } catch (err) {
+      console.error('[v0] Error fetching data:', err)
+      setError('Failed to load contract data')
+    } finally {
+      setIsLoading(false)
+    }
   }, [router])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  useRealtimeRefresh(fetchData, { refetchOnVisible: true })
 
   const formatCurrency = (amount: number | null | undefined) => {
     if (!amount || amount === 0) return 'N/A'

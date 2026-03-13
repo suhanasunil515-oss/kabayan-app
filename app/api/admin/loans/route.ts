@@ -162,7 +162,7 @@ export async function GET(req: NextRequest) {
           order_number: exactLoan.document_number,
           document_number: exactLoan.document_number,
           borrower_name: exactLoan.users?.full_name || 'Unknown',
-          borrower_id_number: exactLoan.users?.id_card_number || 'N/A',
+          borrower_id_number: (exactLoan.personal_info as any)?.id_card_number || exactLoan.users?.id_card_number || 'N/A',
           borrower_phone: exactLoan.users?.phone_number || 'N/A',
           borrower_email: exactLoan.users?.email || null,
           loan_amount: Number(exactLoan.amount_requested) || 0,
@@ -229,6 +229,7 @@ export async function GET(req: NextRequest) {
         loan_term_months,
         status,
         created_at,
+        personal_info,
         users!inner(full_name, phone_number, id_card_number, bank_name)
       `, { count: 'exact' })
       .eq('is_active', true)
@@ -273,12 +274,15 @@ export async function GET(req: NextRequest) {
     if (loanAppsError) throw loanAppsError;
 
     // Transform loan_applications
-    const transformedLoanApps = (loanAppsData || []).map((app: any) => ({
+    const transformedLoanApps = (loanAppsData || []).map((app: any) => {
+      const personalId = app.personal_info?.id_card_number;
+      const userId = app.users?.id_card_number;
+      return {
       id: app.id,
       order_number: app.document_number,
       document_number: app.document_number,
       borrower_name: app.users?.full_name || 'Unknown',
-      borrower_id_number: app.users?.id_card_number || 'N/A',
+      borrower_id_number: personalId || userId || 'N/A',
       borrower_phone: app.users?.phone_number || 'N/A',
       loan_amount: Number(app.amount_requested) || 0,
       interest_rate: Number(app.interest_rate) || 0,
@@ -290,7 +294,8 @@ export async function GET(req: NextRequest) {
       is_active: true,
       source: 'loan_applications',
       loan_type: 'Personal Loan',
-    }));
+    };
+    });
 
     return NextResponse.json({
       success: true,

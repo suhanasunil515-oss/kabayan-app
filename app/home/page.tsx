@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh'
 import Image from 'next/image'
 import { 
   Home, 
@@ -66,27 +67,28 @@ export default function HomePage() {
     { phone: '0921****6038', amount: 3100000, location: 'Leyte', method: 'Bayad Center' }
   ]
 
-  // Fetch user data
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const response = await fetch('/api/user')
-        if (response.ok) {
-          const data = await response.json()
-          setUser(data.user)
-        } else {
-          router.push('/login')
-        }
-      } catch (error) {
-        console.error('Error fetching user:', error)
+  const fetchUser = useCallback(async () => {
+    try {
+      const response = await fetch('/api/user')
+      if (response.ok) {
+        const data = await response.json()
+        setUser(data.user)
+      } else {
         router.push('/login')
-      } finally {
-        setIsLoading(false)
       }
+    } catch (error) {
+      console.error('Error fetching user:', error)
+      router.push('/login')
+    } finally {
+      setIsLoading(false)
     }
-
-    fetchUser()
   }, [router])
+
+  useEffect(() => {
+    fetchUser()
+  }, [fetchUser])
+
+  useRealtimeRefresh(fetchUser, { refetchOnVisible: true, intervalMs: 20000, pollOnlyWhenVisible: true })
 
   // Auto-rotate notifications every 3 seconds
   useEffect(() => {

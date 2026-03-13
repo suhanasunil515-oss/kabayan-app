@@ -63,13 +63,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    // Fetch KYC documents and signature from loan applications
-    const { data: loanApp } = await supabaseAdmin
+    // Fetch loan applications for this user (newest first); use the first one that has KYC so admins see uploaded docs
+    const { data: loanApps } = await supabaseAdmin
       .from('loan_applications')
-      .select('personal_info, kyc_front_url, kyc_back_url, selfie_url, signature_url')
+      .select('personal_info, kyc_front_url, kyc_back_url, selfie_url, signature_url, created_at')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .maybeSingle();
+      .limit(20);
+
+    const applications = loanApps || [];
+    const loanAppWithKyc = applications.find(
+      (app: { kyc_front_url?: string | null; kyc_back_url?: string | null; selfie_url?: string | null }) =>
+        app.kyc_front_url || app.kyc_back_url || app.selfie_url
+    );
+    const loanApp = loanAppWithKyc || applications[0] || null;
 
     // Parse personal_info to get more details
     let personalInfoData = {};
@@ -77,7 +84,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       personalInfoData = loanApp.personal_info;
     }
 
-    // Build ID photos array from KYC documents
+    // Build ID photos array from KYC documents (Front ID, Back ID, Selfie with ID)
     const idPhotos = [];
     if (loanApp?.kyc_front_url) {
       idPhotos.push({ id: 1, url: loanApp.kyc_front_url, type: 'front' });
@@ -213,10 +220,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // Handle different action types with proper mapping
     if (action === 'wallet' && updates.amount !== undefined) {
-      dbUpdates.wallet_balance = parseFloat(updates.amount);
+      const newBalance = parseFloat(updates.amount);
+      const reason = updates.reason || 'Admin wallet modification';
+      dbUpdates.wallet_balance = newBalance;
+      dbUpdates.notes = reason;
       console.log('[v0] Updating wallet:', dbUpdates.wallet_balance);
 
-      // Log wallet modification to history (admin_username used in user notes / audit)
       const { error: historyError } = await supabaseAdmin
         .from('wallet_modification_history')
         .insert({
@@ -224,17 +233,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           admin_id: adminId ? parseInt(adminId) : null,
           admin_username: adminDisplayName,
           old_balance: oldWallet,
-          new_balance: parseFloat(updates.amount),
-          amount_changed: parseFloat(updates.amount) - oldWallet,
-          reason: updates.reason || 'Admin wallet modification',
+          new_balance: newBalance,
+          amount_changed: newBalance - oldWallet,
+          reason,
           created_at: new Date().toISOString(),
         });
-      
-      if (historyError) {
-        console.error('[v0] Error logging wallet modification:', historyError);
-      } else {
-        console.log('[v0] Wallet modification logged successfully');
-      }
+      if (historyError) console.error('[v0] Error logging wallet modification:', historyError);
     } else if (action === 'score' && updates.score !== undefined) {
       dbUpdates.credit_score = parseInt(updates.score);
       console.log('[v0] Updating credit score:', dbUpdates.credit_score);

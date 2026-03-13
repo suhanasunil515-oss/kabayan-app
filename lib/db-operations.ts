@@ -1567,15 +1567,19 @@ export async function createManualDeposit(
       return { success: false, error: 'Failed to save deposit record', data: null };
     }
 
-    await supabaseAdmin.from('wallet_modification_history').insert({
+    const reason = purpose + (notes ? ` – ${notes}` : '');
+    const { error: historyErr } = await supabaseAdmin.from('wallet_modification_history').insert({
       user_id: userId,
       admin_id: adminId ? parseInt(adminId, 10) : null,
       admin_username: adminUsername,
       old_balance: oldBalance,
       new_balance: newBalance,
       amount_changed: amount,
-      reason: purpose + (notes ? ` – ${notes}` : ''),
+      reason,
     });
+    if (historyErr) console.error('[v0] createManualDeposit: wallet_modification_history insert failed', historyErr);
+
+    await supabaseAdmin.from('users').update({ notes: reason }).eq('id', userId);
 
     const desc = notes ? `${purpose} – ${notes}` : purpose;
     const { error: transErr } = await supabaseAdmin.from('transactions').insert({

@@ -10,6 +10,7 @@ import { COMPANY_INFO_FALLBACK, COMPANY_LOGOS, GOVERNMENT_LOGOS } from '@/lib/co
 interface LoanData {
   documentNumber: string
   borrowerName: string
+  borrowerIdNumber?: string
   borrowerPhone?: string
   loanAmount: number
   interestRate: number
@@ -107,6 +108,7 @@ export default function RepaymentSchedulePage() {
     const loanData: LoanData = {
       documentNumber: loan.document_number,
       borrowerName: loan.borrower_name,
+      borrowerIdNumber: loan.borrower_id_number || undefined,
       borrowerPhone: loan.borrower_phone || '+63-XXXXXXXXXX',
       loanAmount: amount,
       interestRate: rate,
@@ -172,8 +174,7 @@ export default function RepaymentSchedulePage() {
     const totalInterest = repaymentSchedule.reduce((sum, item) => sum + item.interest, 0)
     const totalPayment = repaymentSchedule.reduce((sum, item) => sum + item.total, 0)
 
-    // Mock ID card number (in real app, this would come from the loan data)
-    const idCardNumber = '11123343350' // This should be fetched from the actual user data
+    const idCardNumber = currentLoanData.borrowerIdNumber || 'N/A'
 
     const printHTML = `<!DOCTYPE html>
 <html>
@@ -725,6 +726,10 @@ export default function RepaymentSchedulePage() {
                       </div>
                       <div>
                         <p className="text-xs font-semibold text-gray-600 uppercase">Borrower ID Card Number</p>
+                        <p className="font-mono font-semibold text-gray-900">{currentLoanData.borrowerIdNumber || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-600 uppercase">Document Number</p>
                         <p className="font-mono font-semibold text-gray-900">{currentLoanData.documentNumber}</p>
                       </div>
                       <div>

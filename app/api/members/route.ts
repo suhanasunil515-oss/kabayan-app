@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getLatestWalletNotesForUserIds } from '@/lib/db-operations';
 
 export async function GET(req: NextRequest) {
   try {
@@ -45,8 +46,11 @@ export async function GET(req: NextRequest) {
       throw error;
     }
 
-    // Transform data to match expected structure
-    const transformedUsers = (users || []).map((user: any, index: number) => ({
+    const userIds = (users || []).map((u: any) => u.id);
+    const latestWalletNotes = userIds.length > 0 ? await getLatestWalletNotesForUserIds(userIds) : {};
+
+    // Transform data to match expected structure; Note column shows latest wallet change or user.notes
+    const transformedUsers = (users || []).map((user: any) => ({
       id: user.id,
       name: user.full_name || 'Unknown',
       username: user.phone_number,
@@ -55,18 +59,15 @@ export async function GET(req: NextRequest) {
       withdrawalCode: user.withdrawal_otp || null,
       registrationDate: user.created_at,
       status: user.is_banned ? 'disabled' : 'active',
-      // Area from IP: prefer last login location, then registration location / city+country, then IP
       registrationArea:
         user.registration_location ||
         (user.city && user.country ? `${user.city}, ${user.country}` : null) ||
         `Unknown, IP: ${user.ip_address || 'N/A'}`,
       ipAddress: user.ip_address || 'N/A',
-      // 🔴 ADD THESE THREE LINES - THIS IS CRITICAL
       lastLoginLocation: user.last_login_location,
       lastLoginIp: user.last_login_ip,
       lastLoginAt: user.last_login_at,
-      // 🔴
-      note: user.notes || null,
+      note: latestWalletNotes[user.id] ?? user.notes ?? null,
       email: user.email,
     }));
 

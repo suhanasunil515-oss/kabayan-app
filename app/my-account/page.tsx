@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh'
 import Link from 'next/link'
 import Image from 'next/image'
 import { 
@@ -64,34 +65,28 @@ export default function MyAccountPage() {
   // Credit score maximum value
   const MAX_CREDIT_SCORE = 850
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const response = await fetch('/api/account/profile')
-        if (response.ok) {
-          const data = await response.json()
-          setProfile(data.profile)
-          console.log('[v0] Profile loaded:', data.profile)
-        } else {
-          router.push('/login')
-        }
-      } catch (error) {
-        console.error('[v0] Error fetching profile:', error)
+  const fetchProfile = useCallback(async () => {
+    try {
+      const response = await fetch('/api/account/profile')
+      if (response.ok) {
+        const data = await response.json()
+        setProfile(data.profile)
+      } else {
         router.push('/login')
-      } finally {
-        setIsLoading(false)
       }
-    }
-
-    fetchProfile()
-    
-    // Poll for profile updates every 10 seconds to detect admin credit score changes
-    const pollInterval = setInterval(fetchProfile, 10000)
-    
-    return () => {
-      clearInterval(pollInterval)
+    } catch (error) {
+      console.error('[v0] Error fetching profile:', error)
+      router.push('/login')
+    } finally {
+      setIsLoading(false)
     }
   }, [router])
+
+  useEffect(() => {
+    fetchProfile()
+  }, [fetchProfile])
+
+  useRealtimeRefresh(fetchProfile, { refetchOnVisible: true, intervalMs: 10000, pollOnlyWhenVisible: true })
 
   // Calculate credit score percentage
   const getCreditScorePercentage = (score: number): number => {

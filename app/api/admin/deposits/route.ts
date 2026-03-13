@@ -86,16 +86,30 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { userId, amount, purpose, notes } = body;
 
-    if (!userId || amount == null || amount <= 0) {
+    if (userId == null || userId === '') {
       return NextResponse.json(
-        { success: false, error: 'User and a positive amount are required' },
+        { success: false, error: 'User is required. Search for a user first.' },
+        { status: 400 }
+      );
+    }
+    const parsedUserId = parseInt(String(userId), 10);
+    if (Number.isNaN(parsedUserId) || parsedUserId <= 0) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid user. Please search for the user again.' },
+        { status: 400 }
+      );
+    }
+    const parsedAmount = parseFloat(String(amount));
+    if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+      return NextResponse.json(
+        { success: false, error: 'A valid positive amount is required.' },
         { status: 400 }
       );
     }
 
     const result = await createManualDeposit(
-      parseInt(String(userId), 10),
-      parseFloat(String(amount)),
+      parsedUserId,
+      parsedAmount,
       purpose || 'Manual deposit',
       notes || null,
       adminId,

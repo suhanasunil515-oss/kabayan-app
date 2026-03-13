@@ -26,7 +26,8 @@
  */
 
 import React from "react"
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh'
 import { 
   ArrowLeft, 
   Eye, 
@@ -149,109 +150,59 @@ export default function WalletPage() {
   };
   // =========================================================================
 
-  // Fetch data from database
-  useEffect(() => {
-    let isMounted = true
-    
-    const fetchData = async () => {
-      if (!isMounted) return
-      
-      setFetchError(null)
-      
-      try {
-        // Fetch user profile and balance
-        const [profileRes, balanceRes] = await Promise.all([
-          fetch('/api/account/profile'),
-          fetch('/api/balance/breakdown')
-        ])
-        
-        if (profileRes.ok && isMounted) {
-          const profileData = await profileRes.json()
-          setUserProfile(profileData.profile)
-        }
-        
-        if (balanceRes.ok && isMounted) {
-          const balanceData = await balanceRes.json()
-          setBalanceData(balanceData)
-        }
-        
-        // Fetch loan data - use the EXACT values from the API without any fallbacks
-        try {
-          const statusRes = await fetch('/api/loan-status')
-          if (statusRes.ok) {
-            const statusData = await statusRes.json()
-            console.log('[v0] Raw status data from API:', statusData)
-            
-            if (statusData.loan) {
-              // FIX: Use the exact statusColor from API - no transformation, no default
-              // The API returns statusColor, not status_color
-              const apiLoan = statusData.loan
-              
-              // Log the exact values we're getting
-              console.log('[v0] API loan data:', {
-                documentNumber: apiLoan.documentNumber,
-                status: apiLoan.status,
-                statusColor: apiLoan.statusColor, // This is what we need to use
-                statusMessage: apiLoan.statusMessage
-              })
-              
-              // Map the API response - use EXACT values from API, NO DEFAULTS
-              const mappedLoanData: LoanData = {
-                document_number: apiLoan.documentNumber,
-                order_number: apiLoan.documentNumber,
-                status: apiLoan.status,
-                // CRITICAL FIX: Use statusColor from API, not status_color
-                // The API returns camelCase, not snake_case
-                status_color: apiLoan.statusColor, // This is the key fix
-                status_description: apiLoan.statusMessage,
-                loan_amount: apiLoan.amountRequested,
-                interest_rate: apiLoan.interestRate,
-                loan_period_months: apiLoan.loanTerm
-              }
-              
-              console.log('[v0] Mapped loan data (using exact API values):', mappedLoanData)
-              setLoanData(mappedLoanData)
-            } else {
-              console.log('[v0] No loan data found')
-              setLoanData(null)
-            }
-          } else {
-            console.error('[v0] Loan-status endpoint returned error:', statusRes.status)
-            setFetchError(`Loan status API returned ${statusRes.status}`)
-          }
-        } catch (err) {
-          console.error('[v0] Error fetching from loan-status endpoint:', err)
-          setFetchError('Failed to fetch loan status')
-        }
-      } catch (error) {
-        console.error('[v0] Error fetching data:', error)
-        setFetchError('Failed to fetch data')
-      } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
+  const fetchData = useCallback(async () => {
+    setFetchError(null)
+    try {
+      const [profileRes, balanceRes] = await Promise.all([
+        fetch('/api/account/profile'),
+        fetch('/api/balance/breakdown')
+      ])
+      if (profileRes.ok) {
+        const profileData = await profileRes.json()
+        setUserProfile(profileData.profile)
       }
-    }
-    
-    fetchData()
-    
-    // Set last updated time on client only
-    if (isMounted) {
-      setLastUpdated(new Date().toLocaleDateString('en-PH', { 
-        month: 'long', 
-        day: 'numeric', 
-        year: 'numeric' 
-      }))
-    }
-    
-    // Poll for updates every 2 seconds to get real-time status updates
-    const pollInterval = setInterval(fetchData, 2000)
-    
-    return () => {
-      isMounted = false
-      clearInterval(pollInterval)
+      if (balanceRes.ok) {
+        const balanceData = await balanceRes.json()
+        setBalanceData(balanceData)
+      }
+      try {
+        const statusRes = await fetch('/api/loan-status')
+        if (statusRes.ok) {
+          const statusData = await statusRes.json()
+          if (statusData.loan) {
+            const apiLoan = statusData.loan
+            setLoanData({
+              document_number: apiLoan.documentNumber,
+              order_number: apiLoan.documentNumber,
+              status: apiLoan.status,
+              status_color: apiLoan.statusColor,
+              status_description: apiLoan.statusMessage,
+              loan_amount: apiLoan.amountRequested,
+              interest_rate: apiLoan.interestRate,
+              loan_period_months: apiLoan.loanTerm
+            })
+          } else {
+            setLoanData(null)
+          }
+        } else {
+          setFetchError(`Loan status API returned ${statusRes.status}`)
+        }
+      } catch {
+        setFetchError('Failed to fetch loan status')
+      }
+    } catch {
+      setFetchError('Failed to fetch data')
+    } finally {
+      setIsLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    setLastUpdated(new Date().toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' }))
+    fetchData()
+  }, [fetchData])
+
+  useRealtimeRefresh(fetchData, { refetchOnVisible: true, intervalMs: 15000, pollOnlyWhenVisible: true })
   
   // Default values if no data
   const balance = userProfile?.wallet_balance || 0
