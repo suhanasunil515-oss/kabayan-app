@@ -389,58 +389,6 @@ export default function WalletPage() {
     }
   }, [showWithdrawalModal])
 
-  // Helper to refresh data
-  const fetchData = async () => {
-    try {
-      const statusRes = await fetch('/api/loan-status')
-      if (statusRes.ok) {
-        const statusData = await statusRes.json()
-        console.log('[v0] Raw status data from API:', statusData)
-        
-        if (statusData.loan) {
-          const apiLoan = statusData.loan
-          
-          // Log what we got
-          console.log('[v0] API loan data:', {
-            documentNumber: apiLoan.documentNumber,
-            document_number: apiLoan.document_number,
-            status: apiLoan.status,
-            statusColor: apiLoan.statusColor,
-            status_color: apiLoan.status_color,
-            statusMessage: apiLoan.statusMessage,
-            status_description: apiLoan.status_description
-          })
-          
-          // SIMPLE FIX: Use either statusColor or status_color
-          // The API now returns BOTH formats, so we can use whichever is available
-          const statusColorValue = apiLoan.statusColor || apiLoan.status_color
-          
-          console.log('[v0] Using status color:', statusColorValue)
-          
-          const mappedLoanData: LoanData = {
-            document_number: apiLoan.documentNumber || apiLoan.document_number,
-            order_number: apiLoan.documentNumber || apiLoan.document_number,
-            status: apiLoan.status,
-            // Use the resolved color - this will be #22C55E from the database
-            status_color: statusColorValue,
-            status_description: apiLoan.statusMessage || apiLoan.status_description,
-            loan_amount: apiLoan.amountRequested || apiLoan.amount_requested,
-            interest_rate: apiLoan.interestRate || apiLoan.interest_rate,
-            loan_period_months: apiLoan.loanTerm || apiLoan.loan_term
-          }
-          
-          console.log('[v0] Mapped loan data:', mappedLoanData)
-          setLoanData(mappedLoanData)
-        } else {
-          console.log('[v0] No loan data found')
-          setLoanData(null)
-        }
-      }
-    } catch (err) {
-      console.error('[v0] Error refreshing data:', err)
-    }
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col">
       {/* Header with KabayanLoan branding - fixed at top */}
