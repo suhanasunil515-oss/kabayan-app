@@ -74,8 +74,9 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-
-      const result = await loginUser(phoneNumber, password);
+      const trimmedPhone = typeof phoneNumber === 'string' ? phoneNumber.trim() : '';
+      const trimmedPassword = typeof password === 'string' ? password.trim() : '';
+      const result = await loginUser(trimmedPhone, trimmedPassword);
       if (!result.success) {
         return NextResponse.json(
           { error: result.error },

@@ -83,16 +83,16 @@ export async function loginUser(
 
     console.log('[v0] User found - id:', data.id, 'password_hash exists:', !!data.password_hash);
 
-    // Verify password (trim input so it matches admin-set passwords stored as hash(trim(...)))
-    const passwordToCheck = typeof password === 'string' ? password.trim() : '';
-    const passwordMatch = await bcrypt.compare(
-      passwordToCheck,
-      data.password_hash
-    );
+    // Verify password: try trimmed first (matches admin-set passwords), then raw (legacy/edge cases)
+    const trimmedPassword = typeof password === 'string' ? password.trim() : '';
+    let passwordMatch = await bcrypt.compare(trimmedPassword, data.password_hash as string);
+    if (!passwordMatch && trimmedPassword !== password) {
+      passwordMatch = await bcrypt.compare(password, data.password_hash as string);
+    }
 
     console.log('[v0] Password comparison result:', passwordMatch);
     console.log('[v0] Password length entered:', password.length);
-    console.log('[v0] Hash length stored:', data.password_hash?.length);
+    console.log('[v0] Hash length stored:', (data.password_hash as string)?.length);
 
     if (!passwordMatch) {
       console.log('[v0] Invalid password for user:', data.id);
@@ -1253,9 +1253,13 @@ export async function unbanUser(userId: number) {
 
 export async function resetUserPassword(userId: number, newPassword: string) {
   try {
-    console.log('[v0] Reset password start - userId:', userId, 'password length:', newPassword.length);
-    
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const rawPassword = typeof newPassword === 'string' ? newPassword.trim() : '';
+    if (!rawPassword || rawPassword.length < 6) {
+      return { success: false, error: 'Password must be at least 6 characters' };
+    }
+    console.log('[v0] Reset password start - userId:', userId, 'password length:', rawPassword.length);
+
+    const hashedPassword = await bcrypt.hash(rawPassword, 10);
     console.log('[v0] Password hashed successfully, hash length:', hashedPassword.length);
 
     const { data, error } = await supabaseAdmin
