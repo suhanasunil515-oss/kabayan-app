@@ -255,7 +255,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
       const hashedPassword = await bcrypt.hash(rawPassword, 10);
       dbUpdates.password_hash = hashedPassword;
-      console.log('[v0] Updating password with proper bcrypt hashing');
+      console.log('[v0] Updating password with proper bcrypt hashing for user id:', memberId);
     } else if (action === 'bank') {
       // Store bank details in users table with admin flag
       dbUpdates.bank_name = updates.bankName || '';
@@ -321,6 +321,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         { success: false, error: 'Member not found after update' },
         { status: 404 }
       );
+    }
+
+    // If we just updated the password, verify it was persisted so login will work
+    if (dbUpdates.password_hash) {
+      const { data: verifyUser, error: verifyErr } = await supabaseAdmin
+        .from('users')
+        .select('id, password_hash, phone_number')
+        .eq('id', memberId)
+        .single();
+      const rawPassword = typeof updates.password === 'string' ? updates.password.trim() : '';
+      const verified =
+        !verifyErr &&
+        verifyUser?.password_hash &&
+        (await bcrypt.compare(rawPassword, verifyUser.password_hash));
+      if (!verified) {
+        console.error('[v0] Password verification failed after update', {
+          memberId,
+          hasHash: !!verifyUser?.password_hash,
+          hashLength: verifyUser?.password_hash?.length,
+          verifyError: verifyErr?.message,
+        });
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              'Password update was applied but verification failed. The new password may not work at login. Please try again or contact support.',
+          },
+          { status: 500 }
+        );
+      }
+      console.log('[v0] Password verified for user id:', memberId, 'phone:', verifyUser?.phone_number);
     }
 
     console.log('[v0] Member updated successfully');
