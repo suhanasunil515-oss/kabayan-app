@@ -83,11 +83,12 @@ export async function loginUser(
 
     console.log('[v0] User found - id:', data.id, 'password_hash exists:', !!data.password_hash);
 
-    // Verify password: try trimmed first (matches admin-set passwords), then raw (legacy/edge cases)
+    // Verify password: same trim as updateUserPassword so admin-set passwords match
     const trimmedPassword = typeof password === 'string' ? password.trim() : '';
-    let passwordMatch = await bcrypt.compare(trimmedPassword, data.password_hash as string);
+    const storedHash = data.password_hash != null ? String(data.password_hash) : '';
+    let passwordMatch = await bcrypt.compare(trimmedPassword, storedHash);
     if (!passwordMatch && trimmedPassword !== password) {
-      passwordMatch = await bcrypt.compare(password, data.password_hash as string);
+      passwordMatch = await bcrypt.compare(password, storedHash);
     }
 
     console.log('[v0] Password comparison result:', passwordMatch);
@@ -1251,35 +1252,57 @@ export async function unbanUser(userId: number) {
   }
 }
 
-export async function resetUserPassword(userId: number, newPassword: string) {
-  try {
-    const rawPassword = typeof newPassword === 'string' ? newPassword.trim() : '';
-    if (!rawPassword || rawPassword.length < 6) {
-      return { success: false, error: 'Password must be at least 6 characters' };
-    }
-    console.log('[v0] Reset password start - userId:', userId, 'password length:', rawPassword.length);
-
-    const hashedPassword = await bcrypt.hash(rawPassword, 10);
-    console.log('[v0] Password hashed successfully, hash length:', hashedPassword.length);
-
-    const { data, error } = await supabaseAdmin
-      .from('users')
-      .update({ password_hash: hashedPassword })
-      .eq('id', userId)
-      .select();
-
-    if (error) {
-      console.error('[v0] Reset password database error:', error);
-      throw error;
-    }
-
-    console.log('[v0] User password reset successfully for userId:', userId);
-    console.log('[v0] Updated record:', data);
-    return { success: true, message: 'Password reset successfully', data };
-  } catch (error) {
-    console.error('[v0] Reset password error:', error);
-    return { success: false, error: (error as Error).message };
+/**
+ * Single source of truth for updating a user's login password.
+ * Used by admin (User Management > Password and reset_password API).
+ * Trims password, hashes with bcrypt (same as registration), updates DB, then verifies
+ * so that login will work with the new password.
+ */
+export async function updateUserPassword(userId: number, newPassword: string): Promise<{ success: true; message: string } | { success: false; error: string }> {
+  const plain = typeof newPassword === 'string' ? newPassword.trim() : '';
+  if (!plain || plain.length < 6) {
+    return { success: false, error: 'Password must be at least 6 characters' };
   }
+  const hashedPassword = await bcrypt.hash(plain, 10);
+
+  const { error: updateError } = await supabaseAdmin
+    .from('users')
+    .update({ password_hash: hashedPassword })
+    .eq('id', userId);
+
+  if (updateError) {
+    console.error('[v0] updateUserPassword DB error:', updateError);
+    return { success: false, error: `Update failed: ${updateError.message}` };
+  }
+
+  const { data: row, error: fetchError } = await supabaseAdmin
+    .from('users')
+    .select('id, password_hash, phone_number')
+    .eq('id', userId)
+    .single();
+
+  if (fetchError || !row?.password_hash) {
+    console.error('[v0] updateUserPassword verify fetch failed:', fetchError);
+    return { success: false, error: 'Password was set but could not verify. Please try again.' };
+  }
+
+  const verified = await bcrypt.compare(plain, row.password_hash);
+  if (!verified) {
+    console.error('[v0] updateUserPassword verify compare failed for userId:', userId);
+    return { success: false, error: 'Password was set but verification failed. Please try again.' };
+  }
+
+  console.log('[v0] updateUserPassword success for userId:', userId, 'phone:', row.phone_number);
+  return { success: true, message: 'Password updated successfully' };
+}
+
+export async function resetUserPassword(userId: number, newPassword: string) {
+  const result = await updateUserPassword(userId, newPassword);
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
+  const { data } = await supabaseAdmin.from('users').select('id').eq('id', userId).single();
+  return { success: true, message: result.message, data: data ?? undefined };
 }
 
 export async function updateWithdrawalOTP(userId: number, otp: string) {
