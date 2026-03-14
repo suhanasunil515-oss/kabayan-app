@@ -83,9 +83,10 @@ export async function loginUser(
 
     console.log('[v0] User found - id:', data.id, 'password_hash exists:', !!data.password_hash);
 
-    // Verify password
+    // Verify password (trim input so it matches admin-set passwords stored as hash(trim(...)))
+    const passwordToCheck = typeof password === 'string' ? password.trim() : '';
     const passwordMatch = await bcrypt.compare(
-      password,
+      passwordToCheck,
       data.password_hash
     );
 

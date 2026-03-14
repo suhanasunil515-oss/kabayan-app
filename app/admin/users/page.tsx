@@ -1017,11 +1017,12 @@ export default function AdminUsersPage() {
                 <label className="block text-sm font-medium text-[#212529] mb-2">Enter New Password</label>
                 <input
                   type="password"
-                  placeholder="Enter new password"
+                  placeholder="Enter new password (min 6 characters)"
                   value={actionData.password || ''}
                   onChange={(e) => setActionData({ ...actionData, password: e.target.value })}
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg bg-white text-[#212529] focus:outline-none focus:ring-2 focus:ring-[#0038A8] focus:border-transparent"
                 />
+                <p className="text-xs text-[#6C757D] mt-1">Leading/trailing spaces are removed when saving.</p>
               </div>
             )}
 
@@ -1061,7 +1062,10 @@ export default function AdminUsersPage() {
             <div className="flex gap-3 mt-6">
               <Button
                 onClick={handleActionSubmit}
-                disabled={actionLoading}
+                disabled={
+                  actionLoading ||
+                  (actionType === 'password' && (!(actionData.password ?? '').trim() || (actionData.password ?? '').trim().length < 6))
+                }
                 className="flex-1 bg-gradient-to-r from-[#0038A8] to-[#CE1126] hover:from-[#002c86] hover:to-[#b80f20] text-white"
               >
                 {actionLoading ? (

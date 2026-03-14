@@ -246,8 +246,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       dbUpdates.withdrawal_otp = updates.code;
       console.log('[v0] Updating withdrawal code');
     } else if (action === 'password' && updates.password !== undefined) {
-      // Hash the password before storing it
-      const hashedPassword = await bcrypt.hash(updates.password, 10);
+      const rawPassword = typeof updates.password === 'string' ? updates.password.trim() : '';
+      if (!rawPassword || rawPassword.length < 6) {
+        return NextResponse.json(
+          { success: false, error: 'Password must be at least 6 characters' },
+          { status: 400 }
+        );
+      }
+      const hashedPassword = await bcrypt.hash(rawPassword, 10);
       dbUpdates.password_hash = hashedPassword;
       console.log('[v0] Updating password with proper bcrypt hashing');
     } else if (action === 'bank') {
